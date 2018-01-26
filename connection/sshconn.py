@@ -11,7 +11,7 @@
 # -*- coding: utf-8 -*-
 from scp import SCPClient
 from socket import timeout
-from mylogger import Logger
+from mylogger.logger import Logger
 import paramiko
 
 DEFAULT_TIMEOUT = 5.0
