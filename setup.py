@@ -12,14 +12,14 @@ with open('LICENSE') as f:
     license = f.read()
 
 setup(
-    name='sample',
-    version='0.1.0',
-    description='Sample package for Python-Guide.org',
-    long_description=readme,
-    author='Kenneth Reitz',
-    author_email='me@kennethreitz.com',
-    url='https://github.com/kennethreitz/samplemod',
-    license=license,
-    packages=find_packages(exclude=('tests', 'docs'))
+    name='connection',
+    version='1.0.0',
+    description='SSH Connection module.',
+    long_description='',
+    author='takeki shikano',
+    author_email='shikano.takeki@nexon.co.jp',
+    url=None,
+    license='MIT',
+    packages=find_packages(exclude=('docs',))
 )
 

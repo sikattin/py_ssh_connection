@@ -15,7 +15,7 @@ from mylogger.logger import Logger
 import paramiko
 
 DEFAULT_TIMEOUT = 5.0
-
+PRIVATE_KEY = ''
 
 class SSHConn(object):
     """データ転送関連処理をまとめたクラス."""
@@ -30,6 +30,7 @@ class SSHConn(object):
             param3 password: ssh user password.
             param4 authkey: private key for authentication.
         """
+        global DEFAULT_TIMEOUT, PRIVATE_KEY
         # setup logger. loglevel sets 30(warning)
         if loglevel is None:
             loglevel = 30
@@ -38,7 +39,7 @@ class SSHConn(object):
 
         if password is None:
             self.password = ''
-        self.hostame = hostname
+        self.hostname = hostname
         self.username = username
         self.authkey = authkey
         self.timeout = DEFAULT_TIMEOUT
@@ -70,15 +71,62 @@ class SSHConn(object):
         self.client.load_system_host_keys()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         # 鍵認証でない場合.
-        if self.authkey is None:
-            self.client.connect(hostname=self.host, username=self.username,
-                           password=self.password, timeout=self.timeout)
-        # 鍵認証の場合.
-        else:
-            self.client.connect(hostname=self.host, username=self.username,
-                           pkey=self.authkey, timeout=self.timeout)
+        self.client.connect(hostname=self.hostname, username=self.username,
+            password=self.password,
+            key_filename=self.authkey,
+            timeout=self.timeout)
         self.scp = self._new_scpclient()
         self.channel = self._open_session()
+
+    def exec_cmd(
+        self,
+        command: str,
+        bufsize=-1,
+        timeout=None,
+        environment=None,
+    ):
+        """
+        Execute a command on the SSH sever.
+
+        Args:
+            param1 command: the command to execute
+                type: str
+            param2 bufsize:
+                type: int
+            param3 timeout: set command's timeout value.
+                type: int
+            param4 environment: set shell environment variables.
+                type: dict
+
+        Returns:
+            the stdin, stdout , stderr and return code of the executing command,
+            as a tupple.
+
+        Raises:
+            SSHException: if the server fails to execute the command.
+        """
+        rc = None
+        # Transport object
+        transport = self.client.get_transport()
+        # open a new session
+        session = transport.open_channel(kind="session")
+        # set timeout value.
+        if timeout is not None:
+            session.settimeout(timeout)
+        # set environment variables.
+        if environment:
+            session.update_environment(environment)
+        # execute command.
+        session.exec_command(command=command)
+        # get stdin, stdout, stderr
+        stdin = session.makefile('wb', bufsize)
+        stdout = session.makefile('r', bufsize)
+        stderr = session.makefile('r', bufsize)
+        # get return code
+        session.recv(4096)
+        if session.exit_status_ready():
+            rc = session.recv_exit_status()
+        return stdin, stdout, stderr, rc
 
     def scp_put(self, local_path, remote_path: str, recursive=False):
         """Transfer files to remote host.
@@ -143,16 +191,16 @@ class SSHConn(object):
         self.channel.settimeout(self.timeout)
         while cnt < retry_cnt:
             try:
-                self.channel.send(cmd)
+                data = self.channel.send(cmd)
             except timeout as e:
                 print("request was rejected.data has no sent.")
                 cnt += 1
                 continue
             else:
                 if self.channel.recv_ready():
-                    msg = self.channel.recv(2048)
+                    msg = self.channel.recv(4096)
                 if self.channel.recv.stderr_ready():
-                    msg = self.channel.recv_stderr(2048)
+                    msg = self.channel.recv_stderr(4096)
                     raise paramiko.SSHException("executed command returns error.")
                 elif not msg:
                     raise paramiko.SSHException("no response from server.")
