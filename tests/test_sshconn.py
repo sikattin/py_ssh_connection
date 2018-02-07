@@ -11,16 +11,17 @@ class TestSSHConn(unittest.TestCase):
 
     def setUp(self):
         """entering process"""
-        self.ssh_conn = SSHConn(loglevel=10,
-                                hostname='172.16.30.7',
-                                username='Nxj_ToS_TS1',
-                                authkey=PRIVATE_KEY)
+        self.test_ssh_connect()
 
     def tearDown(self):
         """exiting process"""
         del self.ssh_conn
 
     def test_ssh_connect(self):
+        self.ssh_conn = SSHConn(loglevel=10,
+                                hostname='172.16.30.7',
+                                username='Nxj_ToS_TS1',
+                                authkey=PRIVATE_KEY)
         self.assertIsInstance(self.ssh_conn, SSHConn)
 
     def test_exec_cmd(self):

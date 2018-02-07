@@ -9,12 +9,13 @@
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 # -*- coding: utf-8 -*-
-from scp import SCPClient
-from socket import timeout
+from scp import SCPClient, SCPException
+from socket import timeout, error
 from mylogger.logger import Logger
+from osfile import fileope
 import paramiko
 
-DEFAULT_TIMEOUT = 5.0
+DEFAULT_TIMEOUT = 60.0
 PRIVATE_KEY = ''
 
 class SSHConn(object):
@@ -75,6 +76,9 @@ class SSHConn(object):
             password=self.password,
             key_filename=self.authkey,
             timeout=self.timeout)
+        if client is not None:
+            self._logger.debug("succeeded to connect.")
+        self._transport = self.client.get_transport()
         self.scp = self._new_scpclient()
         self.channel = self._open_session()
 
@@ -105,11 +109,11 @@ class SSHConn(object):
         Raises:
             SSHException: if the server fails to execute the command.
         """
+        if timeout is None:
+            timeout = self.timeout
         rc = None
-        # Transport object
-        transport = self.client.get_transport()
         # open a new session
-        session = transport.open_channel(kind="session")
+        session = self._transport.open_session(timeout=timeout)
         # set timeout value.
         if timeout is not None:
             session.settimeout(timeout)
@@ -121,7 +125,7 @@ class SSHConn(object):
         # get stdin, stdout, stderr
         stdin = session.makefile('wb', bufsize)
         stdout = session.makefile('r', bufsize)
-        stderr = session.makefile('r', bufsize)
+        stderr = session.makefile_stderr('r', bufsize)
         # get return code
         session.recv(4096)
         if session.exit_status_ready():
@@ -139,16 +143,31 @@ class SSHConn(object):
             param3 recursive: if local_path is directory ...False
             is list ...True
                 type: bool
+
+        Raises:
+            paramiko.SSHException
+            socket.timeout
+            socket.error
+            SCPException
         """
+
         for path in local_path:
             # make out whether path is directory. if path is direcotory,
             # recursive insert into True.
             if fileope.dir_exists(path):
                 recursive = True
-
-        self.scp.put(r'{}'.format(local_path), r'{}'.format(remote_path), recursive=recursive)
-
-
+        try:
+            self.scp.put(r'{}'.format(local_path), r'{}'.format(remote_path), recursive=recursive)
+        except SCPException as scp_e:
+            raise scp_e
+        except paramiko.SSHException as ssh_e:
+            raise ssh_e
+        except timeout as st:
+            raise st
+        except error as se:
+            raise se
+        else:
+            self._logger.debug("raise no exception. scp executed.")
 
     def scp_get(self, remote_path: str, local_path='', recursive=False):
         """Transfer files from remotehost to localhost.
@@ -158,13 +177,35 @@ class SSHConn(object):
             param2 local_path:
             param3 recursive: default is False.
                 type: bool
+
+        Raises:
+            paramiko.SSHException
+            SCPException
+            socket.timeout
+            socket.error
         """
-        self.scp.get(r'{}'.format(remote_path), r'{}'.format(local_path), recursive=recursive)
+        try:
+            self.scp.get(r'{}'.format(remote_path), r'{}'.format(local_path), recursive=recursive)
+        except SCPException as scp_e:
+            raise scp_e
+        except paramiko.SSHException as ssh_e:
+            raise ssh_e
+        except timeout as st:
+            raise st
+        except error as se:
+            raise se
+        else:
+            self._logger.debug("raise no exception. scp executed.")
 
     def ssh_close(self):
         """close ssh connection."""
-        self.client.close()
+        self._logger.debug("closing ssh session...")
+        # close an SSH Transport.
+        self._transport.close()
+        # close a SCP connection.
         self.scp.close()
+        # close SSH session.
+        self.client.close()
 
     def set_timeout(timeout_value: float):
         """set timeout option for TCP connection.
@@ -185,6 +226,10 @@ class SSHConn(object):
 
         Returns:
             received data, as a str/bytes.
+
+        Raises:
+            paramiko.SSHException
+            timeout
         """
         cnt = 0
         msg = ''
@@ -192,35 +237,42 @@ class SSHConn(object):
         while cnt < retry_cnt:
             try:
                 data = self.channel.send(cmd)
+                self._confirm_recv()
             except timeout as e:
                 print("request was rejected.data has no sent.")
                 cnt += 1
                 continue
             else:
-                if self.channel.recv_ready():
-                    msg = self.channel.recv(4096)
-                if self.channel.recv.stderr_ready():
-                    msg = self.channel.recv_stderr(4096)
-                    raise paramiko.SSHException("executed command returns error.")
-                elif not msg:
-                    raise paramiko.SSHException("no response from server.")
                 break
-        return msg
 
     def _new_scpclient(self):
-        return SCPClient(self.client.get_transport())
+        """return SCPClient instance."""
+        return SCPClient(self._transport)
 
     def _open_session(self):
         """Start an shell session on the SSH server."""
         return self.client.invoke_shell()
 
     def _confirm_recv(self):
-        """confirm command response.
-
-        Args:
-
-        Return:
-            if command is finished normally, return True.
+        """confirm whether the data is sent.
         """
-        if self.channel.recv_ready():
-            return True
+        msg = b''
+        try:
+            msg = self.channel.recv(4096)
+        except timeout as e:
+            raise e
+        else:
+            if msg and msg[0:1] == b'\x00':
+                return
+            elif msg and msg[0:1] == b'\x01':
+                raise paramiko.SSHException("raise error.")
+            elif self.channel.recv_stderr_ready():
+                msg = self.channel.recv_stderr(4096)
+                raise paramiko.SSHException("executed command returns error.")
+            elif not msg:
+                raise paramiko.SSHException("no response from server.")
+
+
+class SSHConnException(Exception):
+    """SSHConn exception class"""
+    pass
