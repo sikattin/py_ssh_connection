@@ -25,23 +25,27 @@ class SSHConn(object):
                  loglevel=None):
         """Constructor of SSHConn class.
 
-        Args
+           password or authkey argument is necessary. raise error to set double.
+        Args:
             param1 hostname: connecting target.
             param2 username: ssh user name.
             param3 password: ssh user password.
             param4 authkey: private key for authentication.
         """
         global DEFAULT_TIMEOUT, PRIVATE_KEY
+        if password is None and authkey is None:
+            raise TypeError("'password' or 'authkey' argument is necessary.")
+        if password is not None and authkey is not None:
+            raise TypeError("'password' and 'authkey' argument is not set at once.")
         # setup logger. loglevel sets 30(warning)
         if loglevel is None:
             loglevel = 30
         Logger.loglevel = loglevel
         self._logger = Logger(str(self))
 
-        if password is None:
-            self.password = ''
         self.hostname = hostname
         self.username = username
+        self.password = password
         self.authkey = authkey
         self.timeout = DEFAULT_TIMEOUT
 
@@ -63,7 +67,7 @@ class SSHConn(object):
         Raises:
             paramiko.BadHostKeyException: if the server's host key could not be
                 verified
-            paramiko.AuthenticationException: if authentication failed
+            paramiko.AuthenticationException:
             paramiko.SSHException: if there was any other error connecting or
                 establishing an SSH session
             socket.error: if a socket error occurred while connecting
@@ -71,12 +75,12 @@ class SSHConn(object):
         self.client = paramiko.SSHClient()
         self.client.load_system_host_keys()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        # 鍵認証でない場合.
+        # authentication.
         self.client.connect(hostname=self.hostname, username=self.username,
-            password=self.password,
             key_filename=self.authkey,
+            password=self.password,
             timeout=self.timeout)
-        if client is not None:
+        if self.client is not None:
             self._logger.debug("succeeded to connect.")
         self._transport = self.client.get_transport()
         self.scp = self._new_scpclient()
