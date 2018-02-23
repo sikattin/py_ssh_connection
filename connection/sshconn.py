@@ -11,7 +11,7 @@
 # -*- coding: utf-8 -*-
 from scp import SCPClient, SCPException
 from socket import timeout, error
-from mylogger.logger import Logger
+from mylogger import factory
 from osfile import fileope
 import paramiko
 
@@ -22,7 +22,7 @@ class SSHConn(object):
     """データ転送関連処理をまとめたクラス."""
 
     def __init__(self, hostname: str, username: str, password=None, authkey=None,
-                 loglevel=None):
+                 logger=None, loglevel=None):
         """Constructor of SSHConn class.
 
            password or authkey argument is necessary. raise error to set double.
@@ -31,17 +31,21 @@ class SSHConn(object):
             param2 username: ssh user name.
             param3 password: ssh user password.
             param4 authkey: private key for authentication.
+            param5 logger: logger instance
+            param6 loglevel: re-set log level of logger instance.
         """
         global DEFAULT_TIMEOUT, PRIVATE_KEY
         if password is None and authkey is None:
             raise TypeError("'password' or 'authkey' argument is necessary.")
         if password is not None and authkey is not None:
             raise TypeError("'password' and 'authkey' argument is not set at once.")
-        # setup logger. loglevel sets 30(warning)
-        if loglevel is None:
-            loglevel = 30
-        Logger.loglevel = loglevel
-        self._logger = Logger(str(self))
+        # setup logger.
+        self._logger = logger
+        if logger is None:
+            slog_fac = factory.StdoutLoggerFactory()
+            self._logger = slog_fac.create()
+        if self._logger is not None and loglevel in {10, 20, 30, 40, 50}:
+            self._logger.set_loglevel(loglevel)
 
         self.hostname = hostname
         self.username = username
@@ -81,7 +85,7 @@ class SSHConn(object):
             password=self.password,
             timeout=self.timeout)
         if self.client is not None:
-            self._logger.debug("succeeded to connect.")
+            self._logger.info("succeeded to ssh connect.")
         self._transport = self.client.get_transport()
         self.scp = self._new_scpclient()
         self.channel = self._open_session()
@@ -157,7 +161,7 @@ class SSHConn(object):
 
         for path in local_path:
             # make out whether path is directory. if path is direcotory,
-            # recursive insert into True.
+            # True insert into recursive arg.
             if fileope.dir_exists(path):
                 recursive = True
         try:
@@ -171,7 +175,7 @@ class SSHConn(object):
         except error as se:
             raise se
         else:
-            self._logger.debug("raise no exception. scp executed.")
+            self._logger.info("raise no exception. scp executed.")
 
     def scp_get(self, remote_path: str, local_path='', recursive=False):
         """Transfer files from remotehost to localhost.
@@ -199,11 +203,11 @@ class SSHConn(object):
         except error as se:
             raise se
         else:
-            self._logger.debug("raise no exception. scp executed.")
+            self._logger.info("raise no exception. scp executed.")
 
     def ssh_close(self):
         """close ssh connection."""
-        self._logger.debug("closing ssh session...")
+        self._logger.info("closing ssh session...")
         # close an SSH Transport.
         self._transport.close()
         # close a SCP connection.
@@ -243,7 +247,7 @@ class SSHConn(object):
                 data = self.channel.send(cmd)
                 self._confirm_recv()
             except timeout as e:
-                print("request was rejected.data has no sent.")
+                self._logger.error("request was rejected.data has no sent.")
                 cnt += 1
                 continue
             else:
