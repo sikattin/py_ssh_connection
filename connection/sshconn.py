@@ -167,12 +167,16 @@ class SSHConn(object):
         try:
             self.scp.put(r'{}'.format(local_path), r'{}'.format(remote_path), recursive=recursive)
         except SCPException as scp_e:
+            self._logger.error(scp_e)
             raise scp_e
         except paramiko.SSHException as ssh_e:
+            self._logger.error(ssh_e)
             raise ssh_e
         except timeout as st:
+            self._logger.error(st)
             raise st
         except error as se:
+            self._logger.error(se)
             raise se
         else:
             self._logger.info("raise no exception. scp executed.")
@@ -195,12 +199,16 @@ class SSHConn(object):
         try:
             self.scp.get(r'{}'.format(remote_path), r'{}'.format(local_path), recursive=recursive)
         except SCPException as scp_e:
+            self._logger.error(scp_e)
             raise scp_e
         except paramiko.SSHException as ssh_e:
+            self._logger.error(ssh_e)
             raise ssh_e
         except timeout as st:
+            self._logger.error(st)
             raise st
         except error as se:
+            self._logger.error(se)
             raise se
         else:
             self._logger.info("raise no exception. scp executed.")
@@ -273,11 +281,14 @@ class SSHConn(object):
             if msg and msg[0:1] == b'\x00':
                 return
             elif msg and msg[0:1] == b'\x01':
-                raise paramiko.SSHException("raise error.")
+                self._logger.error("raise error during confirming the data receieved.")
+                raise paramiko.SSHException("raise error during confirming the data receieved.")
             elif self.channel.recv_stderr_ready():
                 msg = self.channel.recv_stderr(4096)
+                self._logger.error("Return error result of executing command.")
                 raise paramiko.SSHException("executed command returns error.")
             elif not msg:
+                self._logger.error("no response from remote host.")
                 raise paramiko.SSHException("no response from server.")
 
 

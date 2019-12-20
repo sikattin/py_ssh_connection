@@ -13,7 +13,7 @@ with open('LICENSE') as f:
 
 setup(
     name='connection',
-    version='1.0.1',
+    version='1.1',
     description='SSH Connection module.',
     long_description='',
     author='takeki shikano',
