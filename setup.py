@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 
-# Learn more: https://github.com/kennethreitz/setup.py
-
 from setuptools import setup, find_packages
 
 
@@ -16,8 +14,8 @@ setup(
     version='1.1',
     description='SSH Connection module.',
     long_description='',
-    author='takeki shikano',
-    author_email='shikano.takeki@nexon.co.jp',
+    author='Takeki shikano',
+    author_email='',
     url=None,
     license='MIT',
     packages=find_packages(exclude=('docs',))
